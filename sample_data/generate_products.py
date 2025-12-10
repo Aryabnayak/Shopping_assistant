@@ -16,7 +16,7 @@ categories = {
     "Shoes": ["heels", "oxfords", "loafers", "boots"]
 }
 
-colors = ["navy", "black", "ivory", "emerald", "burgundy", "charcoal", "tan", "blush"]
+colors = ["navy", "black", "ivory", "emerald", "burgundy", "charcoal", "tan", "blush","pink"]
 materials = ["wool", "silk", "cotton", "linen", "polyester blend", "suede", "leather"]
 
 def unsplash_image_url(query, w=800, h=800):
@@ -27,7 +27,7 @@ def unsplash_image_url(query, w=800, h=800):
 rows = []
 id_counter = 1
 for cat, templates in categories.items():
-    for i in range(20):  # 20 items per category => ~100 products
+    for i in range(50):  # 20 items per category => ~100 products
         template = choice(templates)
         color = choice(colors)
         mat = choice(materials)

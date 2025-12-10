@@ -10,25 +10,42 @@ if OPENAI_API_KEY:
     openai.api_key = OPENAI_API_KEY
 
 class ShoppingAgent:
-    def __init__(self, index_path="product_index.faiss", meta_db="products_meta.db", emb_method="openai"):
-        self.index = load_faiss_index(index_path)
-        self.meta_db = meta_db
+    def __init__(self, index_path_openai="product_index_openai.faiss",
+                       index_path_local="product_index_local.faiss",
+                       meta_db="products_meta.db",
+                       emb_method="openai"):
         self.emb_method = emb_method
+        self.meta_db = meta_db
+
+        # Load indices if files exist
+        self.index_openai = load_faiss_index(index_path_openai) if index_path_openai and os.path.exists(index_path_openai) else None
+        self.index_local = load_faiss_index(index_path_local) if index_path_local and os.path.exists(index_path_local) else None
+
+        self.index_map = {
+            "openai": self.index_openai,
+            "local": self.index_local
+        }
+
+        if self.index_map[emb_method] is None:
+            raise ValueError(f"No FAISS index found for emb_method='{emb_method}'")
+
+        self.index = self.index_map[emb_method]
+        print(f"[ShoppingAgent] Using {emb_method} embeddings with index dim={self.index.d}")
 
     def retrieve(self, text, k=8):
-        # get embedding
-        if self.emb_method == "openai":
-            emb = get_embeddings([text], model="openai", openai_client=openai)[0]
-        else:
-            emb = get_embeddings([text], model="local", openai_client=None)[0]
+        emb = get_embeddings([text], model=self.emb_method)[0]
+        emb = np.ascontiguousarray(emb, dtype=np.float32)
+
+        if emb.shape[0] != self.index.d:
+            raise ValueError(
+                f"Embedding dimension {emb.shape[0]} does not match FAISS index dimension {self.index.d}. "
+                f"Check emb_method or rebuild index."
+            )
+
         ids, sims = topk_products_from_index(self.index, emb, k=k)
-        # FAISS returns integer index positions: our product IDs were assigned in order from 1..N in generation
-        # map index positions to product ids: since we added embeddings in the same order as products.csv rows with id 1..N,
-        # index position i corresponds to product id i+1
-        product_ids = [str(i+1) for i in ids]
+        product_ids = [str(i + 1) for i in ids]
         products = [fetch_product_by_id(pid, db_path=self.meta_db) for pid in product_ids]
         return products, sims
-
     def generate_lookbook(self, user_request, retrieved_products, chat_history):
         """
         Build a prompt using retrieved products and call LLM to create:

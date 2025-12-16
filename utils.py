@@ -9,10 +9,72 @@ import faiss
 import openai
 import requests
 from datetime import datetime, timedelta
+from sentence_transformers import SentenceTransformer
 
 
 # -------------------------------------------------
-# Module 15: Intent-Locked Pricing Service (New)
+# Module 16: Silent Recovery Commerce™ (New)
+# -------------------------------------------------
+class SilentRecoveryService:
+    """
+    Implements Silent Recovery Commerce™.
+    USP: "Problems are fixed before you notice them."
+    Monitors: Delivery delays, Weather shifts, Stock issues.
+    """
+
+    @staticmethod
+    def monitor_shipping_delays(orders):
+        """
+        Scans active orders. If a delay is simulated/detected on Standard shipping,
+        automatically upgrade to Express/Hyper-Drone to meet the promise.
+        """
+        alerts = []
+        for order in orders:
+            # Only check active orders not already upgraded
+            if "shipping_upgraded" not in order and order.get("shipping_method") == "Standard":
+                # Simulate a logistics delay (e.g., 20% chance)
+                if random.random() > 0.8:
+                    order["shipping_method"] = "Hyper-Drone (Auto-Upgraded)"
+                    order["shipping_upgraded"] = True
+                    alerts.append(
+                        f"🛡️ Recovery: Order #{order['order_id']} faced a delay. We auto-upgraded shipping to Hyper-Drone (Free) to ensure on-time arrival.")
+        return alerts
+
+    @staticmethod
+    def monitor_weather_conflicts(cart, weather_context):
+        """
+        Checks if cart items are suitable for the current/forecasted weather.
+        """
+        alerts = []
+        condition = weather_context.get("condition", "Sunny")
+
+        for item in cart:
+            # Reuse MaterialAnalyzer to check suitability
+            analysis = MaterialAnalyzer.analyze(item.get("description", ""), condition)
+            # If there are warnings, trigger a silent recovery suggestion
+            if analysis["warnings"]:
+                alerts.append(
+                    f"🛡️ Adaptation: Weather shifted to {condition}. {item['title']} might be unsuitable. {analysis['warnings'][0]}")
+
+        return alerts
+
+    @staticmethod
+    def monitor_stock_levels(cart):
+        """
+        Simulates low stock for items in cart and auto-reserves them.
+        """
+        alerts = []
+        for item in cart:
+            # Simulate low stock event (10% chance)
+            if random.random() > 0.9 and not item.get("stock_reserved", False):
+                item["stock_reserved"] = True
+                alerts.append(
+                    f"🛡️ Stock Watch: High demand detected for {item['title']}. We have silently reserved it for you for 15 mins.")
+        return alerts
+
+
+# -------------------------------------------------
+# Module 15: Intent-Locked Pricing Service
 # -------------------------------------------------
 class PriceLockService:
     """
@@ -26,8 +88,6 @@ class PriceLockService:
     def get_market_price(original_price):
         """
         Simulates a live market price check.
-        In a real app, this would hit an API.
-        Here, we randomly simulate a price drop for demonstration.
         """
         # 30% chance that the market price has dropped significantly
         if random.random() > 0.7:
@@ -35,7 +95,6 @@ class PriceLockService:
             discount_factor = random.uniform(0.80, 0.95)
             return round(original_price * discount_factor, 2)
 
-        # Otherwise price stays same or goes up (but lock protects user from increase)
         return original_price
 
     @staticmethod
@@ -48,9 +107,13 @@ class PriceLockService:
         refund_details = []
 
         for order in orders:
-            # Check if order is within 30 days (Intent Lock duration)
-            # Assuming order['date'] is a date object
-            if (datetime.now().date() - order['date']).days <= 30:
+            # Check if order is within 30 days
+            if isinstance(order['date'], str):
+                order_date = datetime.strptime(order['date'], "%Y-%m-%d").date()
+            else:
+                order_date = order['date']
+
+            if (datetime.now().date() - order_date).days <= 30:
                 for item in order['items']:
                     locked_price = item.get('locked_price', item['price'])
                     current_market = PriceLockService.get_market_price(locked_price)
@@ -67,13 +130,8 @@ class PriceLockService:
 # Module 12: Trend Forecasting Service
 # -------------------------------------------------
 class TrendService:
-    """
-    Simulates fetching current fashion trends based on location/season.
-    """
-
     @staticmethod
     def get_trends(location, season):
-        # In a real app, this would scrape social media or use an API.
         trends_db = {
             "Summer": ["Linen", "Pastel", "Floral", "Oversized Tees", "Bucket Hats"],
             "Winter": ["Puffer Jackets", "Cashmere", "Turtlenecks", "Layering", "Boots"],
@@ -81,7 +139,6 @@ class TrendService:
             "Fall": ["Leather", "Earth Tones", "Knits", "Scarves"]
         }
 
-        # Add location specific nuances
         loc_trends = []
         if location == "JP": loc_trends = ["Harajuku", "Minimalist"]
         if location == "US": loc_trends = ["Streetwear", "Athleisure"]
@@ -96,9 +153,6 @@ class TrendService:
 # Module 13: Material & Fabric Analysis
 # -------------------------------------------------
 class MaterialAnalyzer:
-    """
-    Analyzes fabric suitability for weather/usage.
-    """
     FABRIC_RULES = {
         "polyester": {"breathable": False, "warm": True, "weather": ["Cold", "Rainy", "Winter"]},
         "cotton": {"breathable": True, "warm": False, "weather": ["Sunny", "Summer", "Spring"]},
@@ -109,20 +163,15 @@ class MaterialAnalyzer:
 
     @staticmethod
     def analyze(description, current_weather_condition):
-        """
-        Returns a warning or endorsement based on material and weather.
-        """
         desc_lower = description.lower()
         warnings = []
         endorsements = []
 
         for fabric, props in MaterialAnalyzer.FABRIC_RULES.items():
             if fabric in desc_lower:
-                # Check compatibility
                 if current_weather_condition in props["weather"]:
                     endorsements.append(f"✅ {fabric.capitalize()} is great for {current_weather_condition} weather.")
                 else:
-                    # Logic: If it's Summer and fabric is not breathable/too warm
                     if current_weather_condition in ["Sunny", "Summer"] and props["warm"]:
                         warnings.append(f"⚠️ {fabric.capitalize()} might be too warm for current weather.")
                     elif current_weather_condition in ["Winter", "Cold"] and not props["warm"]:
@@ -137,9 +186,6 @@ class MaterialAnalyzer:
 class CartOptimizer:
     @staticmethod
     def check_shipping_threshold(cart_total, threshold=50.0):
-        """
-        Returns gap to free shipping.
-        """
         if cart_total < threshold:
             return threshold - cart_total
         return 0
@@ -148,10 +194,6 @@ class CartOptimizer:
 class ReplenishmentService:
     @staticmethod
     def predict_next_buy(purchase_history):
-        """
-        Analyzes past orders to predict consumable replenishment.
-        """
-        # Mock logic: if 'cream' or 'lotion' purchased > 30 days ago
         suggestions = []
         today = datetime.now().date()
 
@@ -159,7 +201,6 @@ class ReplenishmentService:
             order_date = order.get("date")
             if not order_date: continue
 
-            # Ensure order_date is a date object
             if isinstance(order_date, str):
                 try:
                     order_date = datetime.strptime(order_date, "%Y-%m-%d").date()
@@ -169,7 +210,6 @@ class ReplenishmentService:
             days_diff = (today - order_date).days
 
             for item in order.get("items", []):
-                # Simple logic: consumables last 30 days
                 if any(x in item['title'].lower() for x in ['cream', 'lotion', 'shampoo', 'serum']):
                     if 25 <= days_diff <= 35:
                         suggestions.append(item)
@@ -180,13 +220,9 @@ class ReplenishmentService:
 # Module 11: Image Processing Utils
 # -------------------------------------------------
 def encode_image(file_obj):
-    """
-    Encodes a Streamlit UploadedFile (or standard file) to Base64 string.
-    """
     if file_obj is None:
         return None
     try:
-        # Reset pointer if it's a file-like object
         file_obj.seek(0)
         return base64.b64encode(file_obj.read()).decode('utf-8')
     except Exception as e:
@@ -198,31 +234,22 @@ def encode_image(file_obj):
 # Module 10: External Review Aggregator (Google API)
 # -------------------------------------------------
 class GoogleReviewService:
-    """
-    Fetches external product reviews/ratings using Google Custom Search JSON API.
-    """
     API_KEY = os.getenv("GOOGLE_API_KEY")
-    CSE_ID = os.getenv("GOOGLE_CSE_ID")  # Custom Search Engine ID
+    CSE_ID = os.getenv("GOOGLE_CSE_ID")
 
     @staticmethod
     def fetch_rating(product_title):
-        """
-        Queries Google for reviews. Returns a dict with rating and source.
-        """
-        # 1. Check if Keys exist
         if not GoogleReviewService.API_KEY or not GoogleReviewService.CSE_ID:
-            # FALLBACK: Simulate web search if keys are missing to keep app working
             return GoogleReviewService._simulate_rating(product_title)
 
         try:
-            # 2. Construct Query
             query = f"{product_title} product reviews rating"
             url = "https://www.googleapis.com/customsearch/v1"
             params = {
                 'q': query,
                 'key': GoogleReviewService.API_KEY,
                 'cx': GoogleReviewService.CSE_ID,
-                'num': 3  # Fetch top 3 results
+                'num': 3
             }
 
             resp = requests.get(url, params=params, timeout=2)
@@ -230,14 +257,11 @@ class GoogleReviewService:
                 return GoogleReviewService._simulate_rating(product_title)
 
             data = resp.json()
-
-            # 3. Parse Snippets for Ratings (Simple Regex Heuristic)
             total_score = 0
             count = 0
 
             for item in data.get("items", []):
                 snippet = item.get("snippet", "") + item.get("title", "")
-                # Look for patterns like "4.5 out of 5", "4.5/5", "9/10"
                 match = re.search(r"(\d(\.\d)?)\s*(?:/|out of)\s*5", snippet)
                 if match:
                     score = float(match.group(1))
@@ -251,16 +275,10 @@ class GoogleReviewService:
                 return GoogleReviewService._simulate_rating(product_title)
 
         except Exception as e:
-            print(f"Review Fetch Error: {e}")
             return GoogleReviewService._simulate_rating(product_title)
 
     @staticmethod
     def _simulate_rating(product_title):
-        """
-        Fallback simulation so the UI looks good without a live API key.
-        Deterministically generates a rating based on the product title hash.
-        """
-        # Use hash to make sure the rating for a specific product is always the same
         seed = sum(ord(c) for c in product_title)
         random.seed(seed)
         rating = round(random.uniform(3.8, 5.0), 1)
@@ -272,18 +290,9 @@ class GoogleReviewService:
 # Module 9: Weather & Location Service
 # -------------------------------------------------
 class WeatherService:
-    """
-    Service to handle weather and location fetching logic.
-    """
-
     @staticmethod
     def get_context():
-        """
-        Fetches real-time location and weather data.
-        Returns a dictionary with defaults if APIs fail.
-        """
         try:
-            # 1. IP-based Location Lookup
             location_response = requests.get("https://ipinfo.io/json", timeout=3)
             if location_response.status_code == 200:
                 location_data = location_response.json()
@@ -298,7 +307,6 @@ class WeatherService:
             else:
                 raise Exception("Location API unavailable")
 
-            # 2. Weather Lookup (Open-Meteo)
             weather_response = requests.get(
                 f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&timezone=auto",
                 timeout=3
@@ -310,7 +318,6 @@ class WeatherService:
                 temp = current.get("temperature", 20)
                 weathercode = current.get("weathercode", 0)
 
-                # Logic Inference
                 season = WeatherService._infer_season(temp)
                 condition = WeatherService._infer_condition_text(weathercode)
 
@@ -326,7 +333,6 @@ class WeatherService:
                 raise Exception("Weather API unavailable")
 
         except Exception as e:
-            print(f"Weather Fetch Error: {e}")
             return WeatherService._get_fallback_context()
 
     @staticmethod
@@ -364,9 +370,6 @@ class WeatherService:
 # Module 8: Shipping & Return Policy Logic
 # -------------------------------------------------
 class PolicyManager:
-    """
-    Handles Shipping logic and Return Eligibility.
-    """
     SHIPPING_OPTIONS = {
         "Standard": {"cost": 0, "days": "5-7 Business Days", "threshold": 50},
         "Express": {"cost": 15.00, "days": "2-3 Business Days", "threshold": 100},
@@ -386,16 +389,13 @@ class PolicyManager:
         if not purchase_date:
             return False, "Date not found."
 
-        # Handle date conversion if it's a string
         if isinstance(purchase_date, str):
             try:
                 purchase_date = datetime.strptime(purchase_date, "%Y-%m-%d").date()
             except:
-                pass  # Try comparison anyway or fail
+                pass
 
         today = datetime.now().date()
-
-        # Ensure purchase_date is date object
         if isinstance(purchase_date, datetime):
             purchase_date = purchase_date.date()
 
@@ -432,7 +432,7 @@ class RewardSystem:
     @staticmethod
     def calculate_points(action_type, amount=0):
         if action_type == "purchase":
-            return int(amount)  # Dynamic: 1 point per dollar spent
+            return int(amount)
         rewards = {
             "review": 50,
             "share": 25,
@@ -500,8 +500,10 @@ def get_embeddings(texts, model="openai"):
             embs = [np.random.rand(1536) for _ in texts]
     elif model == "local":
         try:
-            from sentence_transformers import SentenceTransformer
-            embedder = SentenceTransformer("all-MiniLM-L6-v2")
+            embedder = SentenceTransformer(
+                "all-MiniLM-L6-v2",
+                device="cpu"
+            )
             embs = embedder.encode(texts, show_progress_bar=False, convert_to_numpy=True)
         except ImportError:
             embs = [np.random.rand(384) for _ in texts]
